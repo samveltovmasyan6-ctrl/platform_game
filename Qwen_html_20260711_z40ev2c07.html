@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NEON RUNNER // STOMP & SMART ENEMIES</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh;
+    background: radial-gradient(circle at center, #1a0033 0%, #050014 100%);
+    font-family: 'Courier New', monospace;
+    color: #0ff; overflow: hidden;
+  }
+  h1 { 
+    margin-bottom: 15px; font-size: 28px; letter-spacing: 4px;
+    text-shadow: 0 0 10px #0ff, 0 0 20px #f0f;
+  }
+  canvas {
+    background: #000;
+    border: 2px solid #f0f;
+    border-radius: 4px;
+    box-shadow: 0 0 20px #f0f, 0 0 40px rgba(255, 0, 255, 0.3);
+  }
+  .info {
+    margin-top: 15px; background: rgba(0, 0, 0, 0.6); border: 1px solid #0ff;
+    padding: 10px 20px; border-radius: 4px; font-size: 12px;
+    color: #0ff;
+  }
+  .info b { color: #f0f; }
+  #message {
+    margin-top: 10px; font-size: 18px; font-weight: bold;
+    color: #ff007f; text-shadow: 0 0 10px #ff007f;
+    min-height: 25px; letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+  <h1>NEON RUNNER // STOMP</h1>
+  <canvas id="game" width="800" height="450"></canvas>
+  <div id="message"></div>
+  <div class="info">
+    [ <b>←</b> / <b>→</b> ] MOVE &nbsp;&nbsp;|&nbsp;&nbsp; [ <b>SPACE</b> / <b>↑</b> ] JUMP &nbsp;&nbsp;|&nbsp;&nbsp; [ <b>R</b> ] RESTART &nbsp;&nbsp;|&nbsp;&nbsp; <b>ՑԱՏԿԻՐ ՎԵՐԵՎԻՑ ԹՇՆԱՄՈՒՆ!</b>
+  </div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const messageEl = document.getElementById('message');
+
+const LEVELS = [
+  {
+    name: 'SECTOR 01 // BOOT',
+    worldWidth: 3200,
+    bgTop: '#0a001a', bgMid: '#1a0033', bgBot: '#330044',
+    sunColor1: '#ff007f', sunColor2: '#ffaa00',
+    platforms: [
+      { x: 0, y: 420, w: 400, h: 30 }, { x: 500, y: 420, w: 300, h: 30 },
+      { x: 900, y: 420, w: 400, h: 30 }, { x: 1400, y: 420, w: 300, h: 30 },
+      { x: 1800, y: 420, w: 500, h: 30 }, { x: 2400, y: 420, w: 400, h: 30 },
+      { x: 2900, y: 420, w: 300, h: 30 },
+      { x: 200, y: 350, w: 100, h: 12 }, { x: 400, y: 300, w: 100, h: 12 },
+      { x: 600, y: 250, w: 100, h: 12 }, { x: 800, y: 300, w: 100, h: 12 },
+      { x: 1000, y: 350, w: 100, h: 12 }, { x: 1200, y: 280, w: 100, h: 12 },
+      { x: 1400, y: 220, w: 100, h: 12 }, { x: 1600, y: 280, w: 100, h: 12 },
+      { x: 1800, y: 340, w: 100, h: 12 }, { x: 2000, y: 280, w: 100, h: 12 },
+      { x: 2200, y: 220, w: 100, h: 12 }, { x: 2400, y: 160, w: 100, h: 12 },
+      { x: 2600, y: 220, w: 100, h: 12 }, { x: 2800, y: 280, w: 100, h: 12 },
+      { x: 3000, y: 200, w: 100, h: 12 },
+      { x: 300, y: 150, w: 80, h: 12 }, { x: 700, y: 120, w: 80, h: 12 },
+      { x: 1100, y: 150, w: 80, h: 12 }, { x: 1500, y: 100, w: 80, h: 12 },
+      { x: 1900, y: 130, w: 80, h: 12 }, { x: 2300, y: 100, w: 80, h: 12 },
+      { x: 2700, y: 120, w: 80, h: 12 },
+    ],
+    coins: [
+      { x: 240, y: 320 }, { x: 440, y: 270 }, { x: 640, y: 220 },
+      { x: 840, y: 270 }, { x: 1040, y: 320 }, { x: 1240, y: 250 },
+      { x: 1440, y: 190 }, { x: 1640, y: 250 }, { x: 1840, y: 310 },
+      { x: 2040, y: 250 }, { x: 2240, y: 190 }, { x: 2440, y: 130 },
+      { x: 2640, y: 190 }, { x: 2840, y: 250 }, { x: 3040, y: 170 },
+    ],
+    enemies: [
+      { type: 'patrol', x: 550, y: 395, patrolRange: 200, speed: 1.5 },
+      { type: 'patrol', x: 950, y: 395, patrolRange: 250, speed: 2 },
+      { type: 'flying', x: 1300, y: 200, amplitude: 80, speed: 0.03 },
+      { type: 'patrol', x: 1850, y: 395, patrolRange: 300, speed: 1.8 },
+      { type: 'flying', x: 2500, y: 150, amplitude: 100, speed: 0.04 },
+    ],
+    goal: { x: 3100, y: 140, w: 30, h: 60 },
+    playerStart: { x: 50, y: 350 }
+  },
+  {
+    name: 'SECTOR 02 // ASCEND',
+    worldWidth: 3500,
+    bgTop: '#001a0a', bgMid: '#003322', bgBot: '#004433',
+    sunColor1: '#00ff88', sunColor2: '#ffff00',
+    platforms: [
+      { x: 0, y: 420, w: 250, h: 30 }, { x: 350, y: 420, w: 200, h: 30 },
+      { x: 650, y: 420, w: 200, h: 30 }, { x: 950, y: 420, w: 200, h: 30 },
+      { x: 1250, y: 420, w: 200, h: 30 }, { x: 1550, y: 420, w: 200, h: 30 },
+      { x: 1850, y: 420, w: 200, h: 30 }, { x: 2150, y: 420, w: 200, h: 30 },
+      { x: 2450, y: 420, w: 200, h: 30 }, { x: 2750, y: 420, w: 200, h: 30 },
+      { x: 3050, y: 420, w: 200, h: 30 },
+      { x: 150, y: 370, w: 80, h: 12 }, { x: 300, y: 320, w: 80, h: 12 },
+      { x: 450, y: 270, w: 80, h: 12 }, { x: 600, y: 220, w: 80, h: 12 },
+      { x: 750, y: 170, w: 80, h: 12 }, { x: 900, y: 120, w: 80, h: 12 },
+      { x: 1050, y: 170, w: 80, h: 12 }, { x: 1200, y: 220, w: 80, h: 12 },
+      { x: 1350, y: 270, w: 80, h: 12 }, { x: 1500, y: 320, w: 80, h: 12 },
+      { x: 1650, y: 270, w: 80, h: 12 }, { x: 1800, y: 220, w: 80, h: 12 },
+      { x: 1950, y: 170, w: 80, h: 12 }, { x: 2100, y: 120, w: 80, h: 12 },
+      { x: 2250, y: 170, w: 80, h: 12 }, { x: 2400, y: 220, w: 80, h: 12 },
+      { x: 2550, y: 270, w: 80, h: 12 }, { x: 2700, y: 220, w: 80, h: 12 },
+      { x: 2850, y: 170, w: 80, h: 12 }, { x: 3000, y: 120, w: 80, h: 12 },
+      { x: 3150, y: 80, w: 80, h: 12 }, { x: 3300, y: 120, w: 80, h: 12 },
+    ],
+    coins: [
+      { x: 180, y: 340 }, { x: 330, y: 290 }, { x: 480, y: 240 },
+      { x: 630, y: 190 }, { x: 780, y: 140 }, { x: 930, y: 90 },
+      { x: 1080, y: 140 }, { x: 1230, y: 190 }, { x: 1380, y: 240 },
+      { x: 1530, y: 290 }, { x: 1680, y: 240 }, { x: 1830, y: 190 },
+      { x: 1980, y: 140 }, { x: 2130, y: 90 }, { x: 2280, y: 140 },
+      { x: 2430, y: 190 }, { x: 2580, y: 240 }, { x: 2730, y: 190 },
+      { x: 2880, y: 140 }, { x: 3030, y: 90 },
+    ],
+    enemies: [
+      { type: 'patrol', x: 400, y: 395, patrolRange: 150, speed: 2 },
+      { type: 'flying', x: 800, y: 180, amplitude: 60, speed: 0.035 },
+      { type: 'chaser', x: 1500, y: 350, speed: 1.5, detectRange: 250 },
+      { type: 'patrol', x: 2200, y: 395, patrolRange: 150, speed: 2.2 },
+      { type: 'flying', x: 2800, y: 150, amplitude: 80, speed: 0.04 },
+      { type: 'chaser', x: 3200, y: 350, speed: 1.8, detectRange: 200 },
+    ],
+    goal: { x: 3400, y: 20, w: 30, h: 60 },
+    playerStart: { x: 50, y: 350 }
+  },
+  {
+    name: 'SECTOR 03 // INFERNO',
+    worldWidth: 3800,
+    bgTop: '#1a0500', bgMid: '#331100', bgBot: '#441a00',
+    sunColor1: '#ff3300', sunColor2: '#ffcc00',
+    platforms: [
+      { x: 0, y: 420, w: 150, h: 30 }, { x: 250, y: 420, w: 100, h: 30 },
+      { x: 450, y: 420, w: 100, h: 30 }, { x: 650, y: 420, w: 100, h: 30 },
+      { x: 850, y: 420, w: 100, h: 30 }, { x: 1050, y: 420, w: 100, h: 30 },
+      { x: 1250, y: 420, w: 100, h: 30 }, { x: 1450, y: 420, w: 100, h: 30 },
+      { x: 1650, y: 420, w: 100, h: 30 }, { x: 1850, y: 420, w: 100, h: 30 },
+      { x: 2050, y: 420, w: 100, h: 30 }, { x: 2250, y: 420, w: 100, h: 30 },
+      { x: 2450, y: 420, w: 100, h: 30 }, { x: 2650, y: 420, w: 100, h: 30 },
+      { x: 2850, y: 420, w: 100, h: 30 }, { x: 3050, y: 420, w: 100, h: 30 },
+      { x: 3250, y: 420, w: 100, h: 30 }, { x: 3450, y: 420, w: 100, h: 30 },
+      { x: 3650, y: 420, w: 150, h: 30 },
+      { x: 180, y: 360, w: 70, h: 12 }, { x: 380, y: 320, w: 70, h: 12 },
+      { x: 580, y: 280, w: 70, h: 12 }, { x: 780, y: 320, w: 70, h: 12 },
+      { x: 980, y: 360, w: 70, h: 12 }, { x: 1180, y: 300, w: 70, h: 12 },
+      { x: 1380, y: 240, w: 70, h: 12 }, { x: 1580, y: 300, w: 70, h: 12 },
+      { x: 1780, y: 360, w: 70, h: 12 }, { x: 1980, y: 300, w: 70, h: 12 },
+      { x: 2180, y: 240, w: 70, h: 12 }, { x: 2380, y: 180, w: 70, h: 12 },
+      { x: 2580, y: 240, w: 70, h: 12 }, { x: 2780, y: 300, w: 70, h: 12 },
+      { x: 2980, y: 240, w: 70, h: 12 }, { x: 3180, y: 180, w: 70, h: 12 },
+      { x: 3380, y: 240, w: 70, h: 12 }, { x: 3580, y: 300, w: 70, h: 12 },
+    ],
+    coins: [
+      { x: 210, y: 330 }, { x: 410, y: 290 }, { x: 610, y: 250 },
+      { x: 810, y: 290 }, { x: 1010, y: 330 }, { x: 1210, y: 270 },
+      { x: 1410, y: 210 }, { x: 1610, y: 270 }, { x: 1810, y: 330 },
+      { x: 2010, y: 270 }, { x: 2210, y: 210 }, { x: 2410, y: 150 },
+      { x: 2610, y: 210 }, { x: 2810, y: 270 }, { x: 3010, y: 210 },
+    ],
+    enemies: [
+      { type: 'patrol', x: 280, y: 395, patrolRange: 60, speed: 2.5 },
+      { type: 'flying', x: 700, y: 200, amplitude: 70, speed: 0.04 },
+      { type: 'chaser', x: 1200, y: 380, speed: 2, detectRange: 220 },
+      { type: 'patrol', x: 1700, y: 395, patrolRange: 60, speed: 2.8 },
+      { type: 'flying', x: 2200, y: 150, amplitude: 90, speed: 0.045 },
+      { type: 'chaser', x: 2700, y: 380, speed: 2.2, detectRange: 250 },
+      { type: 'patrol', x: 3200, y: 395, patrolRange: 60, speed: 3 },
+      { type: 'flying', x: 3600, y: 200, amplitude: 80, speed: 0.05 },
+    ],
+    goal: { x: 3720, y: 240, w: 30, h: 60 },
+    playerStart: { x: 30, y: 350 }
+  },
+  {
+    name: 'SECTOR 04 // GLACIER',
+    worldWidth: 4000,
+    bgTop: '#000a1a', bgMid: '#001a33', bgBot: '#002a44',
+    sunColor1: '#00aaff', sunColor2: '#ffffff',
+    platforms: [
+      { x: 0, y: 420, w: 200, h: 30 }, { x: 700, y: 420, w: 200, h: 30 },
+      { x: 1400, y: 420, w: 200, h: 30 }, { x: 2100, y: 420, w: 200, h: 30 },
+      { x: 2800, y: 420, w: 200, h: 30 }, { x: 3500, y: 420, w: 200, h: 30 },
+      { x: 150, y: 360, w: 60, h: 12 }, { x: 300, y: 300, w: 60, h: 12 },
+      { x: 450, y: 240, w: 60, h: 12 }, { x: 600, y: 180, w: 60, h: 12 },
+      { x: 750, y: 240, w: 60, h: 12 }, { x: 900, y: 300, w: 60, h: 12 },
+      { x: 1050, y: 360, w: 60, h: 12 }, { x: 1200, y: 300, w: 60, h: 12 },
+      { x: 1350, y: 240, w: 60, h: 12 }, { x: 1500, y: 180, w: 60, h: 12 },
+      { x: 1650, y: 120, w: 60, h: 12 }, { x: 1800, y: 180, w: 60, h: 12 },
+      { x: 1950, y: 240, w: 60, h: 12 }, { x: 2100, y: 300, w: 60, h: 12 },
+      { x: 2250, y: 240, w: 60, h: 12 }, { x: 2400, y: 180, w: 60, h: 12 },
+      { x: 2550, y: 120, w: 60, h: 12 }, { x: 2700, y: 180, w: 60, h: 12 },
+      { x: 2850, y: 240, w: 60, h: 12 }, { x: 3000, y: 300, w: 60, h: 12 },
+      { x: 3150, y: 240, w: 60, h: 12 }, { x: 3300, y: 180, w: 60, h: 12 },
+      { x: 3450, y: 120, w: 60, h: 12 }, { x: 3600, y: 180, w: 60, h: 12 },
+      { x: 3750, y: 240, w: 60, h: 12 }, { x: 3900, y: 180, w: 60, h: 12 },
+    ],
+    coins: [
+      { x: 175, y: 330 }, { x: 325, y: 270 }, { x: 475, y: 210 },
+      { x: 625, y: 150 }, { x: 775, y: 210 }, { x: 925, y: 270 },
+      { x: 1075, y: 330 }, { x: 1225, y: 270 }, { x: 1375, y: 210 },
+      { x: 1525, y: 150 }, { x: 1675, y: 90 }, { x: 1825, y: 150 },
+      { x: 1975, y: 210 }, { x: 2125, y: 270 }, { x: 2275, y: 210 },
+      { x: 2425, y: 150 }, { x: 2575, y: 90 }, { x: 2725, y: 150 },
+      { x: 2875, y: 210 }, { x: 3025, y: 270 },
+    ],
+    enemies: [
+      { type: 'flying', x: 400, y: 180, amplitude: 100, speed: 0.04 },
+      { type: 'flying', x: 1000, y: 220, amplitude: 80, speed: 0.045 },
+      { type: 'chaser', x: 1600, y: 350, speed: 2, detectRange: 200 },
+      { type: 'flying', x: 2200, y: 150, amplitude: 90, speed: 0.05 },
+      { type: 'chaser', x: 2800, y: 350, speed: 2.3, detectRange: 230 },
+      { type: 'flying', x: 3400, y: 180, amplitude: 100, speed: 0.055 },
+      { type: 'chaser', x: 3800, y: 350, speed: 2.5, detectRange: 250 },
+    ],
+    goal: { x: 3920, y: 120, w: 30, h: 60 },
+    playerStart: { x: 50, y: 350 }
+  },
+  {
+    name: 'SECTOR 05 // NEXUS',
+    worldWidth: 4000,
+    bgTop: '#1a0033', bgMid: '#330066', bgBot: '#440088',
+    sunColor1: '#aa00ff', sunColor2: '#ffcc00',
+    platforms: [
+      { x: 0, y: 420, w: 150, h: 30 }, { x: 400, y: 420, w: 100, h: 30 },
+      { x: 800, y: 420, w: 100, h: 30 }, { x: 1200, y: 420, w: 100, h: 30 },
+      { x: 1600, y: 420, w: 100, h: 30 }, { x: 2000, y: 420, w: 100, h: 30 },
+      { x: 2400, y: 420, w: 100, h: 30 }, { x: 2800, y: 420, w: 100, h: 30 },
+      { x: 3200, y: 420, w: 100, h: 30 }, { x: 3600, y: 420, w: 100, h: 30 },
+      { x: 100, y: 360, w: 50, h: 12 }, { x: 200, y: 300, w: 50, h: 12 },
+      { x: 300, y: 240, w: 50, h: 12 }, { x: 400, y: 300, w: 50, h: 12 },
+      { x: 500, y: 360, w: 50, h: 12 }, { x: 600, y: 300, w: 50, h: 12 },
+      { x: 700, y: 240, w: 50, h: 12 }, { x: 800, y: 180, w: 50, h: 12 },
+      { x: 900, y: 240, w: 50, h: 12 }, { x: 1000, y: 300, w: 50, h: 12 },
+      { x: 1100, y: 360, w: 50, h: 12 }, { x: 1200, y: 300, w: 50, h: 12 },
+      { x: 1300, y: 240, w: 50, h: 12 }, { x: 1400, y: 180, w: 50, h: 12 },
+      { x: 1500, y: 120, w: 50, h: 12 }, { x: 1600, y: 180, w: 50, h: 12 },
+      { x: 1700, y: 240, w: 50, h: 12 }, { x: 1800, y: 300, w: 50, h: 12 },
+      { x: 1900, y: 360, w: 50, h: 12 }, { x: 2000, y: 300, w: 50, h: 12 },
+      { x: 2100, y: 240, w: 50, h: 12 }, { x: 2200, y: 180, w: 50, h: 12 },
+      { x: 2300, y: 120, w: 50, h: 12 }, { x: 2400, y: 180, w: 50, h: 12 },
+      { x: 2500, y: 240, w: 50, h: 12 }, { x: 2600, y: 300, w: 50, h: 12 },
+      { x: 2700, y: 240, w: 50, h: 12 }, { x: 2800, y: 180, w: 50, h: 12 },
+      { x: 2900, y: 120, w: 50, h: 12 }, { x: 3000, y: 180, w: 50, h: 12 },
+      { x: 3100, y: 240, w: 50, h: 12 }, { x: 3200, y: 300, w: 50, h: 12 },
+      { x: 3300, y: 240, w: 50, h: 12 }, { x: 3400, y: 180, w: 50, h: 12 },
+      { x: 3500, y: 120, w: 50, h: 12 }, { x: 3600, y: 180, w: 50, h: 12 },
+      { x: 3700, y: 240, w: 50, h: 12 }, { x: 3800, y: 180, w: 50, h: 12 },
+      { x: 3900, y: 120, w: 50, h: 12 },
+    ],
+    coins: [
+      { x: 120, y: 330 }, { x: 220, y: 270 }, { x: 320, y: 210 },
+      { x: 420, y: 270 }, { x: 520, y: 330 }, { x: 620, y: 270 },
+      { x: 720, y: 210 }, { x: 820, y: 150 }, { x: 920, y: 210 },
+      { x: 1020, y: 270 }, { x: 1120, y: 330 }, { x: 1220, y: 270 },
+      { x: 1320, y: 210 }, { x: 1420, y: 150 }, { x: 1520, y: 90 },
+      { x: 1620, y: 150 }, { x: 1720, y: 210 }, { x: 1820, y: 270 },
+      { x: 1920, y: 330 }, { x: 2020, y: 270 }, { x: 2120, y: 210 },
+      { x: 2220, y: 150 }, { x: 2320, y: 90 }, { x: 2420, y: 150 },
+      { x: 2520, y: 210 }, { x: 2620, y: 270 }, { x: 2720, y: 210 },
+      { x: 2820, y: 150 }, { x: 2920, y: 90 },
+    ],
+    enemies: [
+      { type: 'patrol', x: 420, y: 395, patrolRange: 60, speed: 3 },
+      { type: 'flying', x: 800, y: 150, amplitude: 80, speed: 0.05 },
+      { type: 'chaser', x: 1200, y: 350, speed: 2.5, detectRange: 250 },
+      { type: 'patrol', x: 1600, y: 395, patrolRange: 60, speed: 3.2 },
+      { type: 'flying', x: 2000, y: 180, amplitude: 90, speed: 0.055 },
+      { type: 'chaser', x: 2400, y: 350, speed: 2.8, detectRange: 280 },
+      { type: 'patrol', x: 2800, y: 395, patrolRange: 60, speed: 3.5 },
+      { type: 'flying', x: 3200, y: 150, amplitude: 100, speed: 0.06 },
+      { type: 'chaser', x: 3600, y: 350, speed: 3, detectRange: 300 },
+    ],
+    goal: { x: 3920, y: 60, w: 30, h: 60 },
+    playerStart: { x: 30, y: 350 }
+  }
+];
+
+let cameraX = 0;
+let currentLevel = 0;
+let totalScore = 0;
+let enemiesKilled = 0;
+let levelCoins = [];
+let platforms = [];
+let enemies = [];
+let goal = {};
+let won = false;
+let gameComplete = false;
+let time = 0;
+let deathAnimation = 0;
+
+const player = {
+  x: 50, y: 300, w: 28, h: 28,
+  vx: 0, vy: 0, speed: 5, jumpPower: 13,
+  onGround: false
+};
+
+const GRAVITY = 0.65;
+const FRICTION = 0.82;
+
+let stars = [];
+function generateStars(count, worldWidth) {
+  stars = [];
+  for (let i = 0; i < count; i++) {
+    stars.push({
+      x: Math.random() * worldWidth,
+      y: Math.random() * 300,
+      size: Math.random() * 2 + 0.5,
+      depth: Math.random() * 0.5 + 0.2,
+      twinkle: Math.random() * Math.PI * 2
+    });
+  }
+}
+
+class Enemy {
+  constructor(data) {
+    this.type = data.type;
+    this.x = data.x;
+    this.y = data.y;
+    this.startX = data.x;
+    this.startY = data.y;
+    this.w = 24;
+    this.h = 24;
+    this.speed = data.speed || 1.5;
+    this.patrolRange = data.patrolRange || 100;
+    this.direction = 1;
+    this.amplitude = data.amplitude || 50;
+    this.angle = Math.random() * Math.PI * 2;
+    this.detectRange = data.detectRange || 200;
+    this.chasing = false;
+    this.dead = false;
+    this.deathTimer = 0;
+  }
+
+  // Check if there's ground ahead
+  hasGroundAhead() {
+    if (this.type !== 'patrol') return true;
+    
+    const checkX = this.direction > 0 ? this.x + this.w + 5 : this.x - 5;
+    const checkY = this.y + this.h + 5;
+    
+    for (const p of platforms) {
+      if (checkX >= p.x && checkX <= p.x + p.w &&
+          checkY >= p.y && checkY <= p.y + p.h) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  update() {
+    if (this.dead) {
+      this.deathTimer--;
+      return;
+    }
+
+    if (this.type === 'patrol') {
+      // Check for edge before moving
+      if (!this.hasGroundAhead()) {
+        this.direction *= -1;
+      }
+      
+      this.x += this.speed * this.direction;
+      
+      // Also check patrol range
+      if (this.x > this.startX + this.patrolRange) this.direction = -1;
+      if (this.x < this.startX - this.patrolRange) this.direction = 1;
+      
+    } else if (this.type === 'flying') {
+      this.angle += this.speed;
+      this.y = this.startY + Math.sin(this.angle) * this.amplitude;
+      this.x += Math.cos(this.angle * 0.5) * 0.5;
+      if (this.x > this.startX + 100) this.x = this.startX - 100;
+      if (this.x < this.startX - 100) this.x = this.startX + 100;
+      
+    } else if (this.type === 'chaser') {
+      const dx = player.x - this.x;
+      const dy = player.y - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < this.detectRange) {
+        this.chasing = true;
+        this.x += (dx / dist) * this.speed;
+        this.y += (dy / dist) * this.speed * 0.5;
+      } else {
+        this.chasing = false;
+        this.x += this.speed * this.direction * 0.5;
+        if (this.x > this.startX + 50) this.direction = -1;
+        if (this.x < this.startX - 50) this.direction = 1;
+      }
+    }
+  }
+
+  stomp() {
+    this.dead = true;
+    this.deathTimer = 30;
+    enemiesKilled++;
+  }
+
+  draw() {
+    if (this.dead) {
+      if (this.deathTimer > 0) {
+        // Death animation - shrinking
+        const scale = this.deathTimer / 30;
+        ctx.save();
+        ctx.globalAlpha = scale;
+        const cx = this.x + this.w / 2;
+        const cy = this.y + this.h / 2;
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+        ctx.translate(-cx, -cy);
+        this.drawBody();
+        ctx.restore();
+      }
+      return;
+    }
+    
+    this.drawBody();
+  }
+
+  drawBody() {
+    const cx = this.x + this.w / 2;
+    const cy = this.y + this.h / 2;
+    
+    ctx.shadowBlur = 20;
+    
+    if (this.type === 'patrol') {
+      ctx.shadowColor = '#ff0000';
+      ctx.fillStyle = '#220000';
+      ctx.fillRect(this.x, this.y, this.w, this.h);
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(this.x, this.y, this.w, this.h);
+      ctx.fillStyle = '#ff0000';
+      ctx.fillRect(this.x + 5, this.y + 8, 4, 4);
+      ctx.fillRect(this.x + 15, this.y + 8, 4, 4);
+    } else if (this.type === 'flying') {
+      ctx.shadowColor = '#ff00ff';
+      ctx.fillStyle = '#220022';
+      ctx.beginPath();
+      ctx.arc(cx, cy, this.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ff00ff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      const wingOffset = Math.sin(time * 0.3) * 5;
+      ctx.fillStyle = '#ff00ff';
+      ctx.fillRect(this.x - 8, cy - 3 + wingOffset, 8, 6);
+      ctx.fillRect(this.x + this.w, cy - 3 - wingOffset, 8, 6);
+    } else if (this.type === 'chaser') {
+      ctx.shadowColor = this.chasing ? '#ffff00' : '#ff6600';
+      ctx.fillStyle = this.chasing ? '#332200' : '#221100';
+      ctx.beginPath();
+      ctx.moveTo(cx, this.y);
+      ctx.lineTo(this.x + this.w, cy);
+      ctx.lineTo(cx, this.y + this.h);
+      ctx.lineTo(this.x, cy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = this.chasing ? '#ffff00' : '#ff6600';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = this.chasing ? '#ffff00' : '#ff6600';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    ctx.shadowBlur = 0;
+  }
+}
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
+  if (e.key.toLowerCase() === 'r') restartGame();
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+function rectCollision(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+function circleRectCollision(cx, cy, cr, rect) {
+  const closestX = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+  const closestY = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  return (dx * dx + dy * dy) < (cr * cr);
+}
+
+function loadLevel(idx) {
+  const lvl = LEVELS[idx];
+  platforms = lvl.platforms;
+  levelCoins = lvl.coins.map(c => ({ x: c.x, y: c.y, collected: false, r: 10 }));
+  enemies = lvl.enemies.map(e => new Enemy(e));
+  goal = { ...lvl.goal };
+  player.x = lvl.playerStart.x;
+  player.y = lvl.playerStart.y;
+  player.vx = 0; player.vy = 0;
+  won = false;
+  deathAnimation = 0;
+  cameraX = 0;
+  generateStars(150, lvl.worldWidth);
+}
+
+function update() {
+  if (gameComplete || won) return;
+  if (deathAnimation > 0) {
+    deathAnimation--;
+    if (deathAnimation === 0) {
+      loadLevel(currentLevel);
+      messageEl.textContent = '';
+    }
+    return;
+  }
+  time++;
+
+  if (keys['arrowleft'] || keys['a']) player.vx = -player.speed;
+  else if (keys['arrowright'] || keys['d']) player.vx = player.speed;
+  else player.vx *= FRICTION;
+
+  if ((keys['arrowup'] || keys['w'] || keys[' ']) && player.onGround) {
+    player.vy = -player.jumpPower;
+    player.onGround = false;
+  }
+
+  player.vy += GRAVITY;
+  if (player.vy > 15) player.vy = 15;
+
+  player.x += player.vx;
+  for (const p of platforms) {
+    if (rectCollision(player, p)) {
+      if (player.vx > 0) player.x = p.x - player.w;
+      else if (player.vx < 0) player.x = p.x + p.w;
+      player.vx = 0;
+    }
+  }
+
+  player.y += player.vy;
+  player.onGround = false;
+  for (const p of platforms) {
+    if (rectCollision(player, p)) {
+      if (player.vy > 0) {
+        player.y = p.y - player.h;
+        player.onGround = true;
+      } else if (player.vy < 0) {
+        player.y = p.y + p.h;
+      }
+      player.vy = 0;
+    }
+  }
+
+  const lvl = LEVELS[currentLevel];
+  if (player.x < 0) player.x = 0;
+  if (player.x + player.w > lvl.worldWidth) player.x = lvl.worldWidth - player.w;
+
+  const targetCameraX = player.x + player.w / 2 - canvas.width / 2;
+  cameraX += (targetCameraX - cameraX) * 0.1;
+  cameraX = Math.max(0, Math.min(cameraX, lvl.worldWidth - canvas.width));
+
+  if (player.y > 450) {
+    deathAnimation = 60;
+    messageEl.textContent = '💀 SYSTEM FAILURE // REBOOTING...';
+  }
+
+  for (const coin of levelCoins) {
+    if (coin.collected) continue;
+    if (circleRectCollision(coin.x, coin.y, coin.r, player)) {
+      coin.collected = true;
+      totalScore++;
+    }
+  }
+
+  // Update enemies and check collisions
+  for (const enemy of enemies) {
+    if (enemy.dead) continue;
+    
+    enemy.update();
+    
+    if (rectCollision(player, enemy)) {
+      // Check if player is stomping (falling from above)
+      const playerBottom = player.y + player.h;
+      const enemyTop = enemy.y;
+      const isFalling = player.vy > 0;
+      const isAbove = playerBottom < enemyTop + enemy.h * 0.5;
+      
+      if (isFalling && isAbove) {
+        // STOMP!
+        enemy.stomp();
+        player.vy = -8; // Bounce up
+        messageEl.textContent = '💥 ENEMY DESTROYED!';
+        setTimeout(() => {
+          if (!won && !gameComplete && deathAnimation === 0) {
+            messageEl.textContent = '';
+          }
+        }, 800);
+      } else {
+        // Player dies
+        deathAnimation = 60;
+        messageEl.textContent = '💀 DESTROYED BY ENEMY // REBOOTING...';
+      }
+    }
+  }
+
+  // Remove fully dead enemies
+  enemies = enemies.filter(e => !e.dead || e.deathTimer > 0);
+
+  if (rectCollision(player, goal)) {
+    won = true;
+    if (currentLevel < LEVELS.length - 1) {
+      messageEl.textContent = `>> ${LEVELS[currentLevel].name} CLEARED <<`;
+      setTimeout(() => {
+        currentLevel++;
+        loadLevel(currentLevel);
+        messageEl.textContent = `ENTERING ${LEVELS[currentLevel].name}`;
+        setTimeout(() => { if (!gameComplete) messageEl.textContent = ''; }, 1500);
+      }, 1500);
+    } else {
+      gameComplete = true;
+      messageEl.textContent = `ALL SECTORS CLEARED // SCORE: ${totalScore} // KILLS: ${enemiesKilled}`;
+    }
+  }
+}
+
+function draw() {
+  const lvl = LEVELS[currentLevel];
+  
+  const grad = ctx.createLinearGradient(0, 0, 0, 450);
+  grad.addColorStop(0, lvl.bgTop);
+  grad.addColorStop(0.6, lvl.bgMid);
+  grad.addColorStop(1, lvl.bgBot);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 800, 450);
+
+  for (const star of stars) {
+    const sx = star.x - cameraX * star.depth;
+    const wrappedX = ((sx % 800) + 800) % 800;
+    const twinkle = Math.sin(time * 0.05 + star.twinkle) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(255, 255, 255, ${twinkle})`;
+    ctx.fillRect(wrappedX, star.y, star.size, star.size);
+  }
+
+  const sunX = 400 - cameraX * 0.1;
+  const sunGrad = ctx.createLinearGradient(sunX, 130, sunX, 370);
+  sunGrad.addColorStop(0, lvl.sunColor1);
+  sunGrad.addColorStop(1, lvl.sunColor2);
+  ctx.fillStyle = sunGrad;
+  ctx.beginPath();
+  ctx.arc(sunX, 250, 120, Math.PI, 0);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255, 0, 255, 0.3)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 10; i++) {
+    const y = 420 + (i * i * 0.8);
+    if (y > 450) break;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(800, y);
+    ctx.stroke();
+  }
+  for (let i = -15; i <= 15; i++) {
+    const baseX = 400 + (i * 40) - (cameraX * 0.3);
+    const x1 = baseX;
+    const x2 = 400 + (i * 200) - (cameraX * 0.3);
+    ctx.beginPath();
+    ctx.moveTo(x1, 420);
+    ctx.lineTo(x2, 450);
+    ctx.stroke();
+  }
+
+  ctx.save();
+  ctx.translate(-cameraX, 0);
+
+  for (const p of platforms) {
+    if (p.x + p.w < cameraX || p.x > cameraX + 800) continue;
+    const hue = (time * 2 + p.x) % 360;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+    ctx.fillStyle = '#0a0014';
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    const platGrad = ctx.createLinearGradient(p.x, p.y, p.x + p.w, p.y);
+    for (let i = 0; i <= 4; i++) {
+      const segHue = (i * 90 + p.x * 0.5 + time * 2) % 360;
+      platGrad.addColorStop(i / 4, `hsl(${segHue}, 100%, 50%)`);
+    }
+    ctx.strokeStyle = platGrad;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(p.x, p.y, p.w, p.h);
+    ctx.shadowBlur = 0;
+  }
+
+  for (const coin of levelCoins) {
+    if (coin.collected) continue;
+    if (coin.x < cameraX - 20 || coin.x > cameraX + 820) continue;
+    const pulse = Math.sin(time * 0.15 + coin.x * 0.1) * 2;
+    const r = coin.r + pulse;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ffeb3b';
+    ctx.fillStyle = '#ffeb3b';
+    ctx.beginPath();
+    ctx.arc(coin.x, coin.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff59d';
+    ctx.beginPath();
+    ctx.arc(coin.x, coin.y, r * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  for (const enemy of enemies) {
+    if (enemy.x + enemy.w < cameraX || enemy.x > cameraX + 800) continue;
+    enemy.draw();
+  }
+
+  if (goal.x + goal.w > cameraX && goal.x < cameraX + 800) {
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ff007f';
+    ctx.fillStyle = '#220011';
+    ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+    ctx.fillStyle = '#ff007f';
+    ctx.fillRect(goal.x + 4, goal.y + 4, goal.w - 8, goal.h - 8);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(goal.x + 10, goal.y + 10, goal.w - 20, goal.h - 20);
+    ctx.shadowBlur = 0;
+  }
+
+  if (deathAnimation === 0) {
+    const cx = player.x + player.w / 2;
+    const cy = player.y + player.h / 2;
+    const r = player.w / 2;
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = '#0ff';
+    ctx.fillStyle = '#001122';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0ff';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.setLineDash([4, 4]);
+    ctx.lineDashOffset = -time * 0.5;
+    ctx.strokeStyle = '#f0f';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const pulse = Math.sin(time * 0.2) * 0.3 + 0.7;
+    ctx.fillStyle = `rgba(0, 255, 255, ${pulse})`;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  ctx.restore();
+
+  if (deathAnimation > 0) {
+    ctx.fillStyle = `rgba(255, 0, 0, ${deathAnimation / 120})`;
+    ctx.fillRect(0, 0, 800, 450);
+  }
+
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = '#0ff';
+  ctx.fillStyle = '#0ff';
+  ctx.font = 'bold 14px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(`// ${lvl.name}`, 15, 25);
+  ctx.shadowColor = '#ffeb3b';
+  ctx.fillStyle = '#ffeb3b';
+  ctx.textAlign = 'right';
+  ctx.fillText(`DATA: ${totalScore}`, 785, 25);
+  const collected = levelCoins.filter(c => c.collected).length;
+  ctx.shadowColor = '#f0f';
+  ctx.fillStyle = '#f0f';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(`NODES: ${collected}/${levelCoins.length}`, 785, 42);
+  ctx.textAlign = 'left';
+  ctx.fillText(`LEVEL ${currentLevel + 1}/5`, 15, 42);
+  ctx.fillText(`KILLS: ${enemiesKilled}`, 15, 58);
+  ctx.shadowBlur = 0;
+
+  const mmW = 200, mmH = 20;
+  const mmX = 300, mmY = 10;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.fillRect(mmX, mmY, mmW, mmH);
+  ctx.strokeStyle = '#0ff';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mmX, mmY, mmW, mmH);
+  const playerRatio = player.x / lvl.worldWidth;
+  const viewRatio = 800 / lvl.worldWidth;
+  ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+  ctx.fillRect(mmX + (cameraX / lvl.worldWidth) * mmW, mmY, viewRatio * mmW, mmH);
+  ctx.fillStyle = '#0ff';
+  ctx.beginPath();
+  ctx.arc(mmX + playerRatio * mmW, mmY + mmH / 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+  const goalRatio = goal.x / lvl.worldWidth;
+  ctx.fillStyle = '#ff007f';
+  ctx.beginPath();
+  ctx.arc(mmX + goalRatio * mmW, mmY + mmH / 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffeb3b';
+  for (const coin of levelCoins) {
+    if (coin.collected) continue;
+    const coinRatio = coin.x / lvl.worldWidth;
+    ctx.fillRect(mmX + coinRatio * mmW - 1, mmY + mmH / 2 - 1, 2, 2);
+  }
+  ctx.fillStyle = '#ff0000';
+  for (const enemy of enemies) {
+    if (enemy.dead) continue;
+    const enemyRatio = enemy.x / lvl.worldWidth;
+    ctx.fillRect(mmX + enemyRatio * mmW - 1, mmY + mmH / 2 - 1, 2, 2);
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function restartGame() {
+  currentLevel = 0;
+  totalScore = 0;
+  enemiesKilled = 0;
+  gameComplete = false;
+  messageEl.textContent = '';
+  loadLevel(0);
+}
+
+loadLevel(0);
+loop();
+</script>
+</body>
+</html>
